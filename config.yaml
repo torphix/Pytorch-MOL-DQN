@@ -1,0 +1,26 @@
+env:
+  max_steps: 50
+  starting_state: 'CC'
+  reward_type: 'QED'
+  reward_discount: 0.7 # Closer rewards discounted more
+  fix_starting_state: False
+  atom_vocab: {'C','O','N','P'}
+  allowed_ring_sizes: [3,4,5,6]
+  allow_inter_ring_bond: False
+
+agent:
+  device: 'cpu'
+  lr: 1.0e-4
+  hid_ds: [2049, 1024, 512, 256, 128, 1]
+  batch_size: 16
+  update_tgt: 20
+  reward_discount: 0.95
+
+max_steps: 50
+epochs: 5000
+update_step: 20
+search_epsilon: 0.6 # 0.6 = 60% chance for random move
+fingerprint_radius: 3
+fingerprint_len: 2048
+
+log_path: 'tb_logs'
