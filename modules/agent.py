@@ -40,6 +40,9 @@ class Agent:
         for param in self.tgt_network.parameters():
             param.requires_grad = False
         
+        self.search_epsilon = config['search_epsilon']
+        self.search_epsilon_scalar = config['search_epsilon_scalar']
+        self.tgt_net_weight_multiplier = config['tgt_net_weight_multiplier']
         self.reward_discount = config['reward_discount']
         self.batch_size = config['batch_size']
         self.update_tgt = config['update_tgt'] 
@@ -47,18 +50,19 @@ class Agent:
         self.optimizer = Adam(self.policy_network.parameters(), lr=config['lr'])
         self.loss = nn.SmoothL1Loss()
         
-    def get_action(self, observations, search_epsilon):
+    def get_action(self, observations):
         '''
         param: observations: All the next possible future states
         param: search_epsilon: probability threshold for search exploit 
         '''
         # Explore
-        if np.random.uniform() < search_epsilon:
+        if random.randint(0,100) < int(self.search_epsilon*100):
             action = torch.tensor(random.sample(range(observations.shape[0]), 1))
         # Exploit
         else:
             q_values = self.policy_network(observations)
             action = torch.argmax(q_values)
+        self.search_epsilon *= self.search_epsilon_scalar
         return action
     
     def update_params(self, step):
@@ -72,35 +76,41 @@ class Agent:
         5. Optimise policy network parameters based on the predicted state action values (policy network) and target rewards
         '''
         if self.memory.__len__ <= self.batch_size:
-            print('Memory Too short')
             return 
-        # Used values
+        # all possible actions, action taken, reward recieved, next possible actions
         states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
         # Predicted values
-        predicted_rewards = torch.zeros(self.batch_size, 1, requires_grad=False)
-        next_state_values = torch.zeros(self.batch_size, 1, requires_grad=False)
+        predicted_rewards = torch.zeros(self.batch_size, 1, requires_grad=False).to(self.device)
+        next_state_values = torch.zeros(self.batch_size, 1, requires_grad=False).to(self.device)
         for i in range(self.batch_size):
-            # Predicted reward based on action taken (chosen randomly or not)
+            # Get predicted reward from actions taken
             predicted_reward = self.policy_network(actions[i])
             predicted_rewards[i] = predicted_reward
             # Calculate rewards for the following state
             next_state_values[i] = torch.max(self.tgt_network(next_states[i]))
-        # Target rewards are discounted future reward + actual reward for action
-        target_rewards = (next_state_values * self.reward_discount) + torch.tensor(rewards)
-        # Minimise the distance between predicted reward and target
-        # Therefore model gets better at predicting future reward
-        loss = self.loss(predicted_rewards, target_rewards)
+            
+        dones = torch.FloatTensor(dones).to(self.device)
+        masked_next_state_values = (1-dones) * next_state_values.to(self.device)
+        target_rewards = (masked_next_state_values * self.reward_discount) + torch.tensor(rewards).to(self.device)
+
+        error = predicted_rewards - target_rewards
+        loss = torch.where(
+            torch.abs(error) < 1.0,
+            0.5 * error**2,
+            1.0 * (torch.abs(error) - 0.5))
+        
+        loss = loss.mean()
         self.optimizer.zero_grad()
         loss.backward()
+        # Clip gradients
         for param in self.policy_network.parameters():
-            # Clip gradients
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()    
-            
-        if step % self.update_tgt == 0:
-            print(f'Current loss: {loss}')
-            print('Updating Target Network')
-            self.tgt_network.load_state_dict(self.policy_network.state_dict())
+        
+        with torch.no_grad():
+            for p, p_targ in zip(self.policy_network.parameters(), self.tgt_network.parameters()):
+                p_targ.data.mul_(self.tgt_net_weight_multiplier)
+                p_targ.data.add_((1 - self.tgt_net_weight_multiplier) * p.data)
 
         return loss    
             

@@ -9,17 +9,19 @@ env:
   allow_inter_ring_bond: False
 
 agent:
-  device: 'cpu'
+  device: 'cuda:0'
   lr: 1.0e-4
   hid_ds: [2049, 1024, 512, 256, 128, 1]
   batch_size: 16
   update_tgt: 20
   reward_discount: 0.95
-
-max_steps: 50
+  tgt_net_weight_multiplier: 0.995
+  search_epsilon: 1.0 # 1.0 = 100% chance to take random action
+  search_epsilon_scalar: 0.9995 # How much to reduce search eps every step
+  
+max_steps: 40
 epochs: 5000
 update_step: 20
-search_epsilon: 0.6 # 0.6 = 60% chance for random move
 fingerprint_radius: 3
 fingerprint_len: 2048
 

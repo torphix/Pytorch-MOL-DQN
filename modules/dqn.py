@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 from .agent import Agent
 from .env import MoleculeEnv
 from .utils import FeatureExtractor
@@ -16,7 +17,6 @@ class MolDQN:
                                                   config['fingerprint_radius'])
         # Run parameters
         self.max_steps = config['max_steps']
-        self.search_epsilon = config['search_epsilon']
         self.update_step = config['update_step']
         self.epochs = config['epochs']
         # Feature parameters
@@ -36,14 +36,14 @@ class MolDQN:
         4. Once max_steps reached update agent
         5. Loop till max_epochs reached
         '''
-        for step in range(self.epochs):
+        for step in tqdm(range(self.epochs)):
             # Actions are acutally next future states
             actions = self.env.get_actions()
             observations = self.feature_extractor.compute_features(actions)
             # Add number of steps left so network can factor it in
             remaining_step = np.array(self.max_steps - step)
             observations = np.stack([np.append(o, remaining_step) for o in observations])
-            action_idx = self.agent.get_action(observations, self.search_epsilon)
+            action_idx = self.agent.get_action(observations)
             # Action taken (aka next state), reward recieved, final step
             action, reward, done = self.env.take_action(action_idx)
             # Get next state
@@ -57,7 +57,7 @@ class MolDQN:
                 action=action,
                 reward=reward,
                 next_state=next_observations,
-                done=True if step == self.max_steps else False)
+                done=done)
             
             if step % self.update_step == 0:
                 loss = self.agent.update_params(step)
@@ -65,6 +65,9 @@ class MolDQN:
                     self.logger.add_scalar(f'Loss', loss, step)
                 
             if done:
+                print(f'Reward for episode: {reward}')
+                print(f'Current reward discount: {self.agent.reward_discount}')
+                print(f'Current search epsilon: {self.agent.search_epsilon}')
                 final_reward=reward
                 self.env.reset()
                 self.logger.add_scalar("Episode reward", final_reward, step)
