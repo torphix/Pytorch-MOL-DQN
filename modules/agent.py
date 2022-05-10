@@ -43,10 +43,10 @@ class Agent:
         self.search_epsilon = config['search_epsilon']
         self.search_epsilon_scalar = config['search_epsilon_scalar']
         self.tgt_net_weight_multiplier = config['tgt_net_weight_multiplier']
-        self.reward_discount = config['reward_discount']
+        self.gamma = config['gamma']
         self.batch_size = config['batch_size']
         self.update_tgt = config['update_tgt'] 
-        self.memory = ReplayMemory()
+        self.memory = ReplayMemory(config['max_memory_size'])
         self.optimizer = Adam(self.policy_network.parameters(), lr=config['lr'])
         self.loss = nn.SmoothL1Loss()
         
@@ -57,13 +57,13 @@ class Agent:
         '''
         # Explore
         if random.randint(0,100) < int(self.search_epsilon*100):
-            action = torch.tensor(random.sample(range(observations.shape[0]), 1))
+            action_idx = torch.tensor(random.sample(range(observations.shape[0]), 1))
         # Exploit
         else:
             q_values = self.policy_network(observations)
-            action = torch.argmax(q_values)
+            action_idx = torch.argmax(q_values)
         self.search_epsilon *= self.search_epsilon_scalar
-        return action
+        return action_idx
     
     def update_params(self, step):
         '''
@@ -72,13 +72,13 @@ class Agent:
             - Policy network predicts the reward given a state
             - The predicted reward is used to select an action
         3. Calculate the value of the predicted next_state using tgt_network
-        4. Calculate target rewards (predicted_next_state_values * reward_discount) + ground truth reward
+        4. Calculate target rewards (predicted_next_state_values * gamma) + ground truth reward
         5. Optimise policy network parameters based on the predicted state action values (policy network) and target rewards
         '''
         if self.memory.__len__ <= self.batch_size:
             return 
         # all possible actions, action taken, reward recieved, next possible actions
-        states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
+        states, actions, rewards, next_states, finished_status = self.memory.sample(self.batch_size)
         # Predicted values
         predicted_rewards = torch.zeros(self.batch_size, 1, requires_grad=False).to(self.device)
         next_state_values = torch.zeros(self.batch_size, 1, requires_grad=False).to(self.device)
@@ -89,9 +89,9 @@ class Agent:
             # Calculate rewards for the following state
             next_state_values[i] = torch.max(self.tgt_network(next_states[i]))
             
-        dones = torch.FloatTensor(dones).to(self.device)
-        masked_next_state_values = (1-dones) * next_state_values.to(self.device)
-        target_rewards = (masked_next_state_values * self.reward_discount) + torch.tensor(rewards).to(self.device)
+        finished_status = torch.FloatTensor(finished_status).to(self.device)
+        masked_next_state_values = (1-finished_status) * next_state_values.to(self.device)
+        target_rewards = (masked_next_state_values * self.gamma) + torch.tensor(rewards).to(self.device)
 
         error = predicted_rewards - target_rewards
         loss = torch.where(

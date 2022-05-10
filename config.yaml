@@ -1,27 +1,29 @@
 env:
-  max_steps: 50
   starting_state: 'CC'
   reward_type: 'QED'
   reward_discount: 0.7 # Closer rewards discounted more
   fix_starting_state: False
-  atom_vocab: {'C','O','N','P'}
+  atom_vocab: {'C','O','N'}
   allowed_ring_sizes: [3,4,5,6]
   allow_inter_ring_bond: False
 
 agent:
   device: 'cuda:0'
-  lr: 1.0e-4
   hid_ds: [2049, 1024, 512, 256, 128, 1]
-  batch_size: 16
+  batch_size: 128
   update_tgt: 20
-  reward_discount: 0.95
+  reward_discount: 0.9
+  gamma: 0.95 # How much to discount the next state value
   tgt_net_weight_multiplier: 0.995
   search_epsilon: 1.0 # 1.0 = 100% chance to take random action
-  search_epsilon_scalar: 0.9995 # How much to reduce search eps every step
-  
+  min_search_epsilon: 0.05 # Minimum 5% chance to take a random action
+  search_epsilon_scalar: 0.99995 # How much to reduce search eps every step
+  max_memory_size: 10000 # Toggle this as is suitable for your memory limitations
+  lr: 1.0e-4
+
 max_steps: 40
-epochs: 5000
-update_step: 20
+max_iterations: 200000
+update_step: 20 # Target networks is updated every 
 fingerprint_radius: 3
 fingerprint_len: 2048
 

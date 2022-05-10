@@ -3,7 +3,9 @@ from rdkit import Chem
 from rdkit.Chem import Descriptors
 
 
-class MoleculeEnv:
+class 
+
+class BaseMoleculeEnv:
     def __init__(self, config):
         '''
         starting_state: 
@@ -24,7 +26,6 @@ class MoleculeEnv:
         self.allow_inter_ring_bond = config['allow_inter_ring_bond']
         self.allowed_ring_sizes = config['allowed_ring_sizes']
         self.step_counter = 0
-        self.actions = set()
         
         self.bond_vocab = {
             1: Chem.BondType.SINGLE,
@@ -41,18 +42,18 @@ class MoleculeEnv:
     def reset(self):
         self.state = self.starting_state
         self.step_counter = 0
-        self.actions = []
+        self.reward_discount = 0.9
         
-    def get_reward(self, action_idx):
+    def get_reward(self, action):
         # Calculate reward
-        mol = Chem.MolFromSmiles(self.actions[action_idx])
+        mol = Chem.MolFromSmiles(action)
         if self.reward_type == 'logP':
             reward = Descriptors.MolLogP(mol)
         elif self.reward_type == 'QED':
             reward = Descriptors.qed(mol)
         # Discount reward
-        reward_discount = self.reward_discount ** (self.max_steps - self.step_counter)
-        reward *= reward_discount 
+        self.reward_discount = self.reward_discount ** (self.max_steps - self.step_counter)
+        reward *= self.reward_discount 
         return reward
     
     def update_state(self, new_state):
@@ -86,18 +87,16 @@ class MoleculeEnv:
         bond_addition_actions = self.get_bond_addition_actions(free_valence_atoms)
         bond_removal_actions = self.get_bond_removal_actions()
         actions = atom_actions | bond_addition_actions | bond_removal_actions
-        self.actions = list(actions)
-        return actions
+        return list(actions)
     
-    def take_action(self, action_idx):
+    def take_action(self, action):
         done = False
-        self.state = self.actions[action_idx]
+        self.state = action
         self.step_counter += 1
-        reward = self.get_reward(action_idx)
+        reward = self.get_reward(action)
         if self.step_counter == self.max_steps:
             print('Max steps reached, ending session')
             done = True
-        self.actions = list()
         return self.state, reward, done
     
     def get_actions_for_atoms(self, free_valence_atoms):
@@ -175,6 +174,7 @@ class MoleculeEnv:
         Aromatic bonds are not removed
         More than one molecular fragment is not allowed
         '''
+        if len(self.state) <= 2: return set() 
         state = Chem.MolFromSmiles(self.state)
         bond_vocab = [None, *self.bond_vocab.values()]
         bond_actions = set()
@@ -201,10 +201,3 @@ class MoleculeEnv:
                     if len(parts) == 1 or len(parts[0]) == 1:
                         bond_actions.add(parts[-1])
         return bond_actions
-                    
-                    
-                
-        
-        
-        
-   

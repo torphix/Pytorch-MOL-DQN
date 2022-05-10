@@ -32,12 +32,18 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'reward', 'next_state', 'done'))
 
 class ReplayMemory:
-    def __init__(self):
+    def __init__(self, max_size):
         self.memory = deque([])
+        self.max_size = max_size
         
     def push(self, state, action, reward, next_state, done):
-        self.memory.append(Transition(
-            state, action, reward, next_state, done))
+        # Memory is full
+        if len(self.memory) >= self.max_size:
+            self.memory[-1] = Transition(
+                state, action, reward, next_state, done)
+        else: # Memory has space
+            self.memory.append(Transition(
+                state, action, reward, next_state, done))
         
     def sample(self, batch_size):
         batch = random.sample(self.memory, batch_size)
