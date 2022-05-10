@@ -14,3 +14,4 @@
 - [] Multi metric optimization eg: Optimize for lipenskis rule of 5 & predicted IC50 against a target
 - [] Add learnable graph embeddings for molecular structure (right now morgan fingerprint being used)
 - [] Input pharmacophore and desired metrics and create a series of candidate molecules
+- [] Condition with protein graph embedding and use tanimoto factor to generate protein specific molecules
